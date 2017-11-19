@@ -1,38 +1,21 @@
 module Sudoku (
-    Sudoku
-    ) where
+Sudoku
+) where
 
-data Sudoku = Sudoku { rows::[[Maybe Int]] } deriving (Show)
+import Test.QuickCheck
 
-example0 =
-    Sudoku
-        [ [Just 3, Just 6, Nothing,Nothing,Just 7, Just 1, Just 2, Nothing,Nothing]
-        , [Nothing,Just 5, Nothing,Nothing,Nothing,Nothing,Just 1, Just 8, Nothing]
-        , [Nothing,Nothing,Just 9, Just 2, Nothing,Just 4, Just 7, Nothing,Nothing]
-        , [Nothing,Nothing,Nothing,Nothing,Just 1, Just 3, Nothing,Just 2, Just 8]
-        , [Just 4, Nothing,Nothing,Just 5, Nothing,Just 2, Nothing,Nothing,Just 9]
-        , [Just 2, Just 7, Nothing,Just 4, Just 6, Nothing,Nothing,Nothing,Nothing]
-        , [Nothing,Nothing,Just 5, Just 3, Nothing,Just 8, Just 9, Nothing,Nothing]
-        , [Nothing,Just 8, Just 3, Nothing,Nothing,Nothing,Nothing,Just 6, Nothing]
-        , [Nothing,Nothing,Just 7, Just 6, Just 9, Nothing,Nothing,Just 4, Just 3]
-    ]
+data Sudoku = Sudoku { rows::[[Maybe Int]] }
 
-example1 =
-    Sudoku
-        [ [Just 3, Just 6, Just 2,Just 2,Just 7, Just 1, Just 2, Just 2,Just 2]
-        , [Just 2,Just 5, Just 2,Just 2,Just 2,Just 2,Just 1, Just 8, Just 2]
-        , [Just 2,Just 2,Just 9, Just 2, Just 2,Just 4, Just 7, Just 2,Just 2]
-        , [Just 2,Just 2,Just 2,Just 2,Just 1, Just 3, Just 2,Just 2, Just 8]
-        , [Just 4, Just 2,Just 2,Just 5, Just 2,Just 2, Just 2,Just 2,Just 9]
-        , [Just 2, Just 7, Just 2,Just 4, Just 6, Just 2,Just 2,Just 2,Just 2]
-        , [Just 2,Just 2,Just 5, Just 3, Just 2,Just 8, Just 9, Just 2,Just 2]
-        , [Just 2,Just 8, Just 3, Just 2,Just 2,Just 2,Just 2,Just 6, Just 2]
-        , [Just 2,Just 2,Just 7, Just 6, Just 9, Just 2,Just 2,Just 4, Just 3]
-    ]
+instance Show Sudoku where
+    show = unlines . map (concat . (map toStr)) . rows
+        where toStr Nothing  = "."
+              toStr (Just n) = show n
 
+-- * A1
 allBlankSudoku :: Sudoku
 allBlankSudoku = Sudoku { rows=replicate 9 (replicate 9 Nothing) }
 
+-- * A2
 -- check if numbers given in sudoku is between 1 and 9
 -- and size is 9x9
 isSudoku :: Sudoku -> Bool
@@ -42,17 +25,17 @@ isSudoku s = sizeOk && numbersOk
           numberOk Nothing  = True
           numberOk (Just n) = 1<=n && n<=9
 
+-- * A3
 -- check is sudoku is filled i.e there shouldn't 
 -- be cell with value Nothing
 isFilled :: Sudoku -> Bool
-isFilled s = not $ any (==Nothing) $ concat (rows s)
+isFilled = not . any (==Nothing) . concat . rows
 
+-- * B1
 printSudoku :: Sudoku -> IO ()
-printSudoku s = do
-    putStrLn $ unlines $ map (concat . (map toStr)) (rows s)
-    where toStr Nothing  = "."
-          toStr (Just n) = show n
+printSudoku = putStrLn . show
 
+-- * B2
 readSudoku :: FilePath -> IO Sudoku
 readSudoku fp = do
     sudokuAsStr <- readFile fp
@@ -62,6 +45,19 @@ readSudoku fp = do
     where toSudoku s = Sudoku { rows=map (map toMaybeInt) (lines s) }
           toMaybeInt '.' = Nothing
           toMaybeInt c   = (Just (read [c] :: Int))
+
+-- * C1
+cell :: Gen (Maybe Int)
+cell = frequency [(9, (return Nothing)), (1, fmap Just $ elements [1..9])]
+
+-- * C2
+instance Arbitrary Sudoku where
+    arbitrary = do 
+        rows <- vectorOf 9 (vectorOf 9 cell) 
+        return (Sudoku rows)
+
+prop_Sudoku :: Sudoku -> Bool
+prop_Sudoku s = isSudoku s
 
 -- print sudoku files
 -- > printSudokuFiles $ sudokuFiles "sudokus/easy" 50
