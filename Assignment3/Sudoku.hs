@@ -3,6 +3,7 @@ Sudoku
 ) where
 
 import Test.QuickCheck
+import Data.List (nub, transpose)
 
 data Sudoku = Sudoku { rows::[[Maybe Int]] }
 
@@ -10,6 +11,19 @@ instance Show Sudoku where
     show = unlines . map (concat . (map toStr)) . rows
         where toStr Nothing  = "."
               toStr (Just n) = show n
+
+example :: Sudoku
+example = Sudoku
+    [ [Just 3, Just 6, Nothing,Nothing,Just 7, Just 1, Just 2, Nothing,Nothing]
+    , [Nothing,Just 5, Nothing,Nothing,Nothing,Nothing,Just 1, Just 8, Nothing]
+    , [Nothing,Nothing,Just 9, Just 2, Nothing,Just 4, Just 7, Nothing,Nothing]
+    , [Nothing,Nothing,Nothing,Nothing,Just 1, Just 3, Nothing,Just 2, Just 8]
+    , [Just 4, Nothing,Nothing,Just 5, Nothing,Just 2, Nothing,Nothing,Just 9]
+    , [Just 2, Just 7, Nothing,Just 4, Just 6, Nothing,Nothing,Nothing,Nothing]
+    , [Nothing,Nothing,Just 5, Just 3, Nothing,Just 8, Just 9, Nothing,Nothing]
+    , [Nothing,Just 8, Just 3, Nothing,Nothing,Nothing,Nothing,Just 6, Nothing]
+    , [Nothing,Nothing,Just 7, Just 6, Just 9, Nothing,Nothing,Just 4, Just 3]
+    ]
 
 -- * A1
 allBlankSudoku :: Sudoku
@@ -58,6 +72,23 @@ instance Arbitrary Sudoku where
 
 prop_Sudoku :: Sudoku -> Bool
 prop_Sudoku s = isSudoku s
+
+-- * D1
+type Block = [Maybe Int]
+isOkayBlock :: Block -> Bool
+isOkayBlock ns = length (nub numbers) == length numbers
+    where numbers = filter (/=Nothing) ns
+
+-- * D2
+blocks :: Sudoku -> [Block]
+blocks s@(Sudoku rows) = rows ++ (transpose rows) ++ [blockAt (3*r) (3*c) s | r<-[0..2], c<-[0..2]]
+
+blockAt :: Int -> Int -> Sudoku -> Block
+blockAt row col (Sudoku rows) = concat [ take 3 (drop col r)  | r <- (take 3 (drop row rows)) ]
+
+-- * D3
+isOkay :: Sudoku -> Bool
+isOkay s = all isOkayBlock (blocks s)
 
 -- print sudoku files
 -- > printSudokuFiles $ sudokuFiles "sudokus/easy" 50
