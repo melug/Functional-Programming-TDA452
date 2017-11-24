@@ -6,6 +6,8 @@ import Test.QuickCheck
 import Data.List (nub, transpose)
 
 data Sudoku = Sudoku { rows::[[Maybe Int]] }
+-- Part B
+type Pos = (Int, Int)
 
 instance Show Sudoku where
     show = unlines . map (concat . (map toStr)) . rows
@@ -89,6 +91,79 @@ blockAt row col (Sudoku rows) = concat [ take 3 (drop col r)  | r <- (take 3 (dr
 -- * D3
 isOkay :: Sudoku -> Bool
 isOkay s = all isOkayBlock (blocks s)
+
+-- * E1
+-- index each row to (row index, row), then expand each
+-- tuple to (row index, (column index, value)) then
+-- filter by value==Nothing.
+-- at last transform into (row index, column index)
+blanks :: Sudoku -> [Pos]
+blanks Sudoku { rows=rows }  = concat $ map blankRows (zip [0..] rows)
+    where blankRows (r, row) = map dropVal $ filter nothingCell (zip3 (repeat r) [0..] row)
+          nothingCell (r, c, val) = val==Nothing
+          dropVal (r, c, v) = (r, c)
+
+-- return value of cell at given positon
+cellAt :: Sudoku -> Pos -> Maybe Int
+cellAt Sudoku { rows=rows } (r, c) = head $ drop c $ head $ drop r rows
+
+prop_blank :: Sudoku -> Bool
+prop_blank s = all isCellBlank (blanks s)
+    where isCellBlank p = Nothing==cellAt s p
+
+-- * E2
+-- position where it supposed to be replaced
+-- could be greater than length of array.
+(!!=) :: [a] -> (Int,a) -> [a]
+(a:arr) !!= (0,elem) = elem:arr
+(a:arr) !!= (i,elem) = a:(arr !!= (i-1, elem))
+_ !!= _              = error "index is greater than size"
+
+-- check property on non-empty int arrays.
+-- replace element at random position with 99 and
+-- check whether the element at i-th is 99.
+prop_replace :: [Int] -> Int -> Bool
+prop_replace [] index   = True
+prop_replace nums index = 99 == (nums !!= (i, 99)) !! i
+    -- make some normalization for index since
+    -- index could be greater than size or negative.
+    where i = mod (abs index) (length nums)
+
+-- * E3
+update :: Sudoku -> Pos -> Maybe Int -> Sudoku
+update (Sudoku {rows=oldRows}) (r, c) val = Sudoku {rows=newRows}
+    where newRows = oldRows !!= (r, newRow)
+          newRow  = (oldRows !! r) !!= (c, val)
+
+-- takes sudoku and position, then new value.
+-- checks if new value is set.
+prop_update :: Sudoku -> (Int, Int) -> Maybe Int -> Bool
+prop_update s (r, c) val = let r'=(mod (abs r) 9)
+                               c'=(mod (abs c) 9)
+                               newSudoku=update s (r', c') val
+                            in cellAt newSudoku (r', c')==val
+
+-- * E4
+-- any cell belongs to exactly 3 blocks
+-- (1 horizontal, 1 vertical, 1 box block).
+-- start with possible candidates as [1..9]
+-- then remove numbers that already exists
+-- in those 3 blocks.
+candidates :: Sudoku -> Pos -> [Int]
+candidates s@(Sudoku {rows=rows}) (r, c) = map unwrapMaybe (foldl (-=) (map Just [1..9]) [horizontalBlock, verticalBlock, boxBlock])
+    where horizontalBlock = rows !! r
+          verticalBlock = (transpose rows) !! c
+          boxBlock = blockAt (div r 3) (div c 3) s
+          unwrapMaybe (Just v) = v
+
+-- takes two set of numbers and return first
+-- set by removing elements that exists in 
+-- 2nd set.
+(-=) :: [Maybe Int] -> [Maybe Int] -> [Maybe Int]
+(-=) []     bs = []
+(-=) (a:as) bs 
+  | elem a bs  = as-=bs
+  | otherwise  = a:(as-=bs)
 
 -- print sudoku files
 -- > printSudokuFiles $ sudokuFiles "sudokus/easy" 50
