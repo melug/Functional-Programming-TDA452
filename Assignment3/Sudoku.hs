@@ -5,6 +5,7 @@ main
 import Test.QuickCheck
 import Data.List (nub, transpose, sort)
 import Data.Maybe (fromJust)
+import Debug.Trace (trace)
 
 data Sudoku = Sudoku { rows::[[Maybe Int]] } deriving (Eq)
 -- Part B
@@ -149,21 +150,63 @@ prop_update s (r, c) val = let r'=(mod (abs r) 9)
 -- (1 horizontal, 1 vertical, 1 box block).
 -- start with possible candidates as [1..9]
 -- then remove numbers that already exists
--- in those 3 blocks.
-candidates :: Sudoku -> Pos -> [Int]
-candidates s@(Sudoku {rows=rows}) (r, c) = map fromJust (foldl (-=) (map Just [1..9]) [horizontalBlock, verticalBlock, boxBlock])
-    where horizontalBlock = rows !! r
-          verticalBlock = (transpose rows) !! c
-          boxBlock = blockAt (3*(div r 3)) (3*(div c 3)) s
+-- in those 3 blocks. it is naive approach.
+candidates' :: Sudoku -> Pos -> [Int]
+candidates' s@(Sudoku {rows=rows}) p@(r, c) = case cellValue of
+                                                 Nothing  -> candids
+                                                 (Just v) -> [v] 
+    where cellValue       = cellAt s p
+          candids         = map fromJust (foldl (-=) (map Just [1..9]) [horizontalBlock, verticalBlock, boxBlock])
+          horizontalBlock = rows !! r
+          verticalBlock   = (transpose rows) !! c
+          boxBlock        = blockAt (3*(div r 3)) (3*(div c 3)) s
 
--- takes two set of numbers and return first
--- set by removing elements that exists in 
--- 2nd set.
-(-=) :: [Maybe Int] -> [Maybe Int] -> [Maybe Int]
+-- restricted version of candidates. 
+candidates'' :: Sudoku -> Pos -> [Int]
+candidates'' s pos = possibleVals
+    where possibleVals = foldl1 (*=) $ map restrictedValues [neighborsBox, neighborsHor, neighborsVer]
+          restrictedValues values 
+            | length values==9 = [1..9]
+            | otherwise        = [1..9] -= values
+          neighborsBox = foldl1 (+=) $ map (candidates' s) (boxNeighbors pos)
+          neighborsHor = foldl1 (+=) $ map (candidates' s) (horizontalNeighbors pos)
+          neighborsVer = foldl1 (+=) $ map (candidates' s) (verticalNeighbors pos)
+
+candidates :: Sudoku -> Pos -> [Int]
+candidates s p = case candidates' s p of
+                   c' -> case candidates'' s p of
+                           c'' -> if length c'>length c'' then c''
+                                                          else c'
+
+horizontalNeighbors :: Pos -> [Pos]
+horizontalNeighbors (row, col) = zip (repeat row) ([0..(col-1)]++[(col+1)..8])
+
+verticalNeighbors :: Pos -> [Pos]
+verticalNeighbors (row, col) = zip ([0..(row-1)]++[(row+1)..8]) (repeat col)
+
+boxNeighbors :: Pos -> [Pos]
+boxNeighbors (row, col) =  [(r0, c0) | r0<-[rs..(rs+2)], c0<-[cs..(cs+2)]] -= [(row, col)]
+    where rs = 3*(div row 3)
+          cs = 3*(div col 3)
+
+-- intersection of two sets
+(*=) :: (Eq a) => [a] -> [a] -> [a]
+(*=) [] _  = []
+(*=) _  [] = []
+(*=) (a:as) bs
+  | elem a bs = a:(as *= bs)
+  | otherwise = as *= bs
+
+-- difference of two sets
+(-=) :: (Eq a) => [a] -> [a] -> [a]
 (-=) []     bs = []
 (-=) (a:as) bs 
-  | elem a bs  = as-=bs
-  | otherwise  = a:(as-=bs)
+  | elem a bs  = as -= bs
+  | otherwise  = a:(as -= bs)
+
+-- union of two sets
+(+=) :: (Eq a) => [a] -> [a] -> [a]
+(+=) as bs = nub (as++bs)
 
 -- * F1
 solve :: Sudoku -> Maybe Sudoku
@@ -177,9 +220,11 @@ solve' sud blankPositions blanksLen
   | otherwise             = notNothing searchSpace
 -- start with cells which has least number of candidates
 -- if any blank cell has 0 number of candidates, sudoku cannot be solved.
-  where blanksOrdered = let orderedPos = sort [ (length (candidates sud pos), pos) | pos<-blankPositions ]
-                            isDead = fst (head orderedPos)==0
-                         in if isDead then [] else snd $ unzip orderedPos
+  where blanksOrdered 
+          | isDead    = []
+          | otherwise = snd $ unzip orderedPos
+        orderedPos  = sort [ (length (candidates sud pos), pos) | pos<-blankPositions, length (candidates sud pos)==1 ]
+        isDead      = fst (head orderedPos)==0
         searchSpace = [ solve' (update sud bPos (Just c)) bRest (blanksLen-1) | (bPos, bRest)<-dropOne blanksOrdered, c<-candidates sud bPos ]
 
 -- return first element that is not Nothing
