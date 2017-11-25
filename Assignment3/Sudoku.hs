@@ -3,9 +3,10 @@ Sudoku
 ) where
 
 import Test.QuickCheck
-import Data.List (nub, transpose)
+import Data.List (nub, transpose, sort)
+import Data.Maybe (fromJust)
 
-data Sudoku = Sudoku { rows::[[Maybe Int]] }
+data Sudoku = Sudoku { rows::[[Maybe Int]] } deriving (Eq)
 -- Part B
 type Pos = (Int, Int)
 
@@ -150,11 +151,10 @@ prop_update s (r, c) val = let r'=(mod (abs r) 9)
 -- then remove numbers that already exists
 -- in those 3 blocks.
 candidates :: Sudoku -> Pos -> [Int]
-candidates s@(Sudoku {rows=rows}) (r, c) = map unwrapMaybe (foldl (-=) (map Just [1..9]) [horizontalBlock, verticalBlock, boxBlock])
+candidates s@(Sudoku {rows=rows}) (r, c) = map fromJust (foldl (-=) (map Just [1..9]) [horizontalBlock, verticalBlock, boxBlock])
     where horizontalBlock = rows !! r
           verticalBlock = (transpose rows) !! c
-          boxBlock = blockAt (div r 3) (div c 3) s
-          unwrapMaybe (Just v) = v
+          boxBlock = blockAt (3*(div r 3)) (3*(div c 3)) s
 
 -- takes two set of numbers and return first
 -- set by removing elements that exists in 
@@ -164,6 +164,39 @@ candidates s@(Sudoku {rows=rows}) (r, c) = map unwrapMaybe (foldl (-=) (map Just
 (-=) (a:as) bs 
   | elem a bs  = as-=bs
   | otherwise  = a:(as-=bs)
+
+-- * F1
+solve :: Sudoku -> Maybe Sudoku
+solve s
+  | isSudoku s && isOkay s = solve' s
+  | otherwise              = Nothing
+
+solve' :: Sudoku -> Maybe Sudoku
+solve' s
+  | full                  = Just s
+  | deadEnd               = Nothing
+  | otherwise             = case solutions of
+                              (s:ss) -> s
+                              []     -> Nothing
+  -- 1. deadEnd. check if there's a blank cell which doesn't have candidates. in this case we're doomed to fail
+  -- 2. start with blanks which has least possible candidates.
+  where deadEnd   = any (\b -> 0==length (candidates s b)) (blanks s)
+        full      = isFilled s
+        solutions = filter (/=Nothing) searchSpace
+        blanksOrd = snd $ unzip $ sort [ (length (candidates s b), b) | b<-blanks s ]
+        searchSpace = [ solve' (update s b (Just c)) | b<-blanksOrd, c<-candidates s b ]
+
+isSolutionOf :: Sudoku -> Sudoku -> Bool
+isSolutionOf sol sud = undefined
+
+-- F2 *
+readAndSolve :: FilePath -> IO ()
+readAndSolve f = do
+    s <- readSudoku f
+    putStrLn $ show $ fromJust $ solve s
+
+main :: IO ()
+main = readAndSolve "sudokus/easy01.sud"
 
 -- print sudoku files
 -- > printSudokuFiles $ sudokuFiles "sudokus/easy" 50
