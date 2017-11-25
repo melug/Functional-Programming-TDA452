@@ -1,5 +1,5 @@
-module Sudoku (
-Sudoku
+module Main (
+main
 ) where
 
 import Test.QuickCheck
@@ -168,28 +168,38 @@ candidates s@(Sudoku {rows=rows}) (r, c) = map fromJust (foldl (-=) (map Just [1
 -- * F1
 solve :: Sudoku -> Maybe Sudoku
 solve s
-  | isSudoku s && isOkay s = solve' s
+  | isSudoku s && isOkay s = solve' s (blanks s) (length (blanks s))
   | otherwise              = Nothing
 
-solve' :: Sudoku -> Maybe Sudoku
-solve' s
-  | full                  = Just s
-  | deadEnd               = Nothing
-  | otherwise             = case solutions of
-                              (s:ss) -> s
-                              []     -> Nothing
-  -- 1. deadEnd. check if there's a blank cell which doesn't have candidates. in this case we're doomed to fail
-  -- 2. start with blanks which has least possible candidates.
-  where deadEnd   = any (\b -> 0==length (candidates s b)) (blanks s)
-        full      = isFilled s
-        solutions = filter (/=Nothing) searchSpace
-        blanksOrd = snd $ unzip $ sort [ (length (candidates s b), b) | b<-blanks s ]
-        searchSpace = [ solve' (update s b (Just c)) | b<-blanksOrd, c<-candidates s b ]
+solve' :: Sudoku -> [Pos] -> Int -> Maybe Sudoku
+solve' sud blankPositions blanksLen
+  | blanksLen==0          = Just sud
+  | otherwise             = notNothing searchSpace
+-- start with cells which has least number of candidates
+-- if any blank cell has 0 number of candidates, sudoku cannot be solved.
+  where blanksOrdered = let orderedPos = sort [ (length (candidates sud pos), pos) | pos<-blankPositions ]
+                            isDead = fst (head orderedPos)==0
+                         in if isDead then [] else snd $ unzip orderedPos
+        searchSpace = [ solve' (update sud bPos (Just c)) bRest (blanksLen-1) | (bPos, bRest)<-dropOne blanksOrdered, c<-candidates sud bPos ]
 
+-- return first element that is not Nothing
+notNothing :: (Eq a) => [Maybe a] -> Maybe a
+notNothing [] = Nothing
+notNothing (x:xs)
+  | x==Nothing = notNothing xs
+  | otherwise  = x
+
+-- creates new lists by dropping each element once.
+-- i.e [1,2,3] -> [(1, [2, 3]), (2, [1, 3]), (3, [1, 2])]
+dropOne :: [a] -> [(a, [a])]
+dropOne []     = []
+dropOne (x:xs) = (x, xs):map fixRest (dropOne xs)
+    where fixRest (d, ds) = (d, x:ds)
+
+-- F2 *
 isSolutionOf :: Sudoku -> Sudoku -> Bool
 isSolutionOf sol sud = undefined
 
--- F2 *
 readAndSolve :: FilePath -> IO ()
 readAndSolve f = do
     s <- readSudoku f
