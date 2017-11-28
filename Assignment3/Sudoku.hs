@@ -174,7 +174,7 @@ candidatesFromBlock sud poss = let (certainNumbers, possibleNumbers) = collectNu
 
 -- return two list of numbers
 -- first list contains numbers extracted from given positions
--- second list contains possible numbers on given positions
+-- second list contains possible numbers on those positions
 collectNumbers :: Sudoku -> [Pos] -> ([Int], [Int])
 collectNumbers sud@(Sudoku {rows=rows}) poss = (certainNumbers, possibleNumbers)
     where certainNumbers    = map fromJust $ justNumbers
@@ -253,8 +253,6 @@ isSolutionOf (Sudoku {rows=rowsSol}) (Sudoku {rows=rowsSud}) = all covers $ zip 
           covers _                      = False
 
 -- F4 *
-fewerChecks prop_SolveSound = quickCheckWith stdArgs{ maxSuccess = 5 } prop_SolveSound
-
 prop_SolveSound :: Sudoku -> Property
 prop_SolveSound sud = isOkay sud ==> case solve sud of
                                        Nothing  -> True
