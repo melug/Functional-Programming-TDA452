@@ -65,7 +65,7 @@ readSudoku fp = do
 
 -- * C1
 cell :: Gen (Maybe Int)
-cell = frequency [(9, (return Nothing)), (3, fmap Just $ elements [1..9])]
+cell = frequency [(9, (return Nothing)), (1, fmap Just $ elements [1..9])]
 
 -- * C2
 instance Arbitrary Sudoku where
@@ -248,15 +248,14 @@ readAndSolve f = do
 -- F3 *
 isSolutionOf :: Sudoku -> Sudoku -> Bool
 isSolutionOf (Sudoku {rows=rowsSol}) (Sudoku {rows=rowsSud}) = all covers $ zip (concat rowsSol) (concat rowsSud)
-    where covers (cSol, Nothing)        = True
+    where covers ((Just c0), Nothing)   = True
           covers ((Just c0), (Just c1)) = c0==c1
           covers _                      = False
 
 -- F4 *
 prop_SolveSound :: Sudoku -> Property
-prop_SolveSound sud = isOkay sud ==> case solve sud of
-                                       Nothing  -> True
-                                       (Just s) -> isSolutionOf s sud
+prop_SolveSound sud = let solution = solve sud
+                       in (solution /= Nothing) ==> isSolutionOf (fromJust solution) sud
 
 main :: IO ()
 main = readAndSolve "sudokus/easy01.sud"
