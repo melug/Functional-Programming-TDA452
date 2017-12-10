@@ -3,7 +3,7 @@ main
 ) where
 
 import Test.QuickCheck
-import Data.List (nub, transpose, sort)
+import Data.List (nub, transpose, sort, union, intersect, (\\))
 import Data.Maybe (fromJust)
 import Debug.Trace (trace)
 
@@ -150,55 +150,56 @@ prop_update s (r, c) val = let r'=(mod (abs r) 9)
 -- (1 horizontal, 1 vertical, 1 box block).
 -- start with possible candidates as [1..9]
 -- then remove numbers that already exists
--- in those 3 blocks. it is naive approach.
-candidates' :: Sudoku -> Pos -> [Int]
-candidates' s@(Sudoku {rows=rows}) p@(r, c) = case cellValue of
-                                                 Nothing  -> candids
-                                                 (Just v) -> [v] 
-    where cellValue       = cellAt s p
-          candids         = map fromJust (foldl (-=) (map Just [1..9]) [horizontalBlock, verticalBlock, boxBlock])
-          horizontalBlock = rows !! r
-          verticalBlock   = (transpose rows) !! c
-          boxBlock        = blockAt (3*(div r 3)) (3*(div c 3)) s
+-- in those 3 blocks. `naiveCandidates` does
+-- so. It's improved in candidates function.
+naiveCandidates :: Sudoku -> Pos -> [Int]
+naiveCandidates s@(Sudoku {rows=rows}) p@(r, c) = case cellAt s p of
+                                               Nothing  -> candidates'
+                                               (Just v) -> [v]
+   where candidates' = map fromJust (foldl (-=) (map Just [1..9]) [horizontalBlock, verticalBlock, boxBlock])
+         horizontalBlock = rows !! r
+         verticalBlock = (transpose rows) !! c
+         boxBlock = blockAt (3*(div r 3)) (3*(div c 3)) s
 
--- restricted version of candidates. 
-candidates'' :: Sudoku -> Pos -> [Int]
-candidates'' s pos = possibleVals
-    where possibleVals = foldl1 (*=) $ map restrictedValues [neighborsBox, neighborsHor, neighborsVer]
-          restrictedValues values 
-            | length values==9 = [1..9]
-            | otherwise        = [1..9] -= values
-          neighborsBox = foldl1 (+=) $ map (candidates' s) (boxNeighbors pos)
-          neighborsHor = foldl1 (+=) $ map (candidates' s) (horizontalNeighbors pos)
-          neighborsVer = foldl1 (+=) $ map (candidates' s) (verticalNeighbors pos)
-
+-- try to prune search space using clues
+-- from cells which are in same block.
 candidates :: Sudoku -> Pos -> [Int]
-candidates s p = case candidates' s p of
-                   c' -> case candidates'' s p of
-                           c'' -> if length c'>length c'' then c''
-                                                          else c'
+candidates sud pos = foldl1 intersect $ map (candidatesFromBlock sud) [horizontalPos pos, verticalPos pos, boxPos pos]
 
-horizontalNeighbors :: Pos -> [Pos]
-horizontalNeighbors (row, col) = zip (repeat row) ([0..(col-1)]++[(col+1)..8])
+candidatesFromBlock :: Sudoku -> [Pos] -> [Int]
+candidatesFromBlock sud poss = let (certainNumbers, possibleNumbers) = collectNumbers sud poss 
+                                   neighborChoices = certainNumbers `union` possibleNumbers 
+                                in case length neighborChoices==9 of 
+                                     True  -> [1..9] \\ certainNumbers
+                                     False -> [1..9] \\ neighborChoices
 
-verticalNeighbors :: Pos -> [Pos]
-verticalNeighbors (row, col) = zip ([0..(row-1)]++[(row+1)..8]) (repeat col)
+-- return two list of numbers
+-- first list contains numbers extracted from given positions
+-- second list contains possible numbers on those positions
+collectNumbers :: Sudoku -> [Pos] -> ([Int], [Int])
+collectNumbers sud@(Sudoku {rows=rows}) poss = (certainNumbers, possibleNumbers)
+    where certainNumbers    = map fromJust $ justNumbers
+          possibleNumbers   = nub $ concat $ map (naiveCandidates sud) nothingNumbersPos
+          justNumbers       = filter (/=Nothing) $ cellValues
+          nothingNumbersPos = filter (\p -> cellAt sud p==Nothing) poss
+          cellValues        = map (cellAt sud) poss
 
-boxNeighbors :: Pos -> [Pos]
-boxNeighbors (row, col) =  [(r0, c0) | r0<-[rs..(rs+2)], c0<-[cs..(cs+2)]] -= [(row, col)]
-    where rs = 3*(div row 3)
-          cs = 3*(div col 3)
+    
+horizontalPos :: Pos -> [Pos]
+horizontalPos pos@(row, col) = zip (repeat row) [0..8] \\ [pos]
 
--- intersection of two sets
-(*=) :: (Eq a) => [a] -> [a] -> [a]
-(*=) [] _  = []
-(*=) _  [] = []
-(*=) (a:as) bs
-  | elem a bs = a:(as *= bs)
-  | otherwise = as *= bs
+verticalPos :: Pos -> [Pos]
+verticalPos pos@(row, col) = zip [0..8] (repeat col) \\ [pos]
 
--- difference of two sets
-(-=) :: (Eq a) => [a] -> [a] -> [a]
+boxPos :: Pos -> [Pos]
+boxPos pos@(row, col) = let brow = (div row 3)*3
+                            bcol = (div col 3)*3
+                         in [ (brow+r, bcol+c) | r<-[0..2], c<-[0..2] ] \\ [pos]
+
+-- takes two set of numbers and return first
+-- set by removing elements that exists in 
+-- 2nd set.
+(-=) :: [Maybe Int] -> [Maybe Int] -> [Maybe Int]
 (-=) []     bs = []
 (-=) (a:as) bs 
   | elem a bs  = as -= bs
@@ -235,6 +236,8 @@ notNothing (x:xs)
   | otherwise  = x
 
 -- creates new lists by dropping each element once.
+-- used for enumerating possible candidates at given cell
+-- in sudoku.
 -- i.e [1,2,3] -> [(1, [2, 3]), (2, [1, 3]), (3, [1, 2])]
 dropOne :: [a] -> [(a, [a])]
 dropOne []     = []
@@ -242,31 +245,24 @@ dropOne (x:xs) = (x, xs):map fixRest (dropOne xs)
     where fixRest (d, ds) = (d, x:ds)
 
 -- F2 *
-isSolutionOf :: Sudoku -> Sudoku -> Bool
-isSolutionOf sol sud = undefined
-
 readAndSolve :: FilePath -> IO ()
 readAndSolve f = do
     s <- readSudoku f
-    putStrLn $ show $ fromJust $ solve s
+    case solve s of
+      Nothing    -> putStrLn "(no solution)"
+      (Just sol) -> putStrLn $ show sol
+
+-- F3 *
+isSolutionOf :: Sudoku -> Sudoku -> Bool
+isSolutionOf (Sudoku {rows=rowsSol}) (Sudoku {rows=rowsSud}) = all covers $ zip (concat rowsSol) (concat rowsSud)
+    where covers ((Just c0), Nothing)   = True
+          covers ((Just c0), (Just c1)) = c0==c1
+          covers _                      = False
+
+-- F4 *
+prop_SolveSound :: Sudoku -> Property
+prop_SolveSound sud = let solution = solve sud
+                       in (solution /= Nothing) ==> isSolutionOf (fromJust solution) sud
 
 main :: IO ()
 main = readAndSolve "sudokus/easy01.sud"
-
--- print sudoku files
--- > printSudokuFiles $ sudokuFiles "sudokus/easy" 50
--- > printSudokuFiles $ sudokuFiles "sudokus/hard" 95
-printSudokuFiles :: [FilePath] -> IO ()
-printSudokuFiles []  = do return ()
-printSudokuFiles (f:fs) = do
-    sudoku <- readSudoku f
-    printSudoku sudoku
-    printSudokuFiles fs
-
-sudokuFiles :: String -> Int -> [FilePath]
-sudokuFiles prefix n = map (\n -> prefix++n++".sud") $ map padInt [1..n]
-
-padInt :: Int -> String
-padInt n 
-  | n<10      = "0" ++ show n
-  | otherwise = show n
