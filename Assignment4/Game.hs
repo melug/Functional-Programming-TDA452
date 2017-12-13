@@ -23,9 +23,6 @@ example0 = Board { board = [
                         [ r, e, r, e, e, e, r, e],
                         [ e, b, e, e, e, e, e, b]
                    ]}
-    where e = Empty
-          r = C Red
-          b = C Black
 
 -- | The example board
 example1 :: Board
@@ -39,17 +36,14 @@ example1 = Board { board = [
                         [ r, e, r, e, e, e, r, e],
                         [ e, e, e, e, e, e, e, b]
                    ]}
-    where e = Empty
-          r = C Red
-          b = C Black
 
 -- | The 'cells' function takes board and returns list of cell information.
 cells :: Board -> [(Pos, Cell)]
 cells (Board b) = concat $ map (\(r, row) -> map (\(c, val) -> ((r, c), val)) (zip [0..] row)) (zip [0..] b)
 
--- | The 'pieces' function takes piece and board. Returns positions of pieces with same color.
-pieces :: Piece -> Board -> [Pos]
-pieces p b = [ pos | (pos, cell) <- cells b, cell==(C p) ]
+-- | The 'pieces' function takes color and board. Returns positions of pieces with same color.
+pieces :: Color -> Board -> [Pos]
+pieces c b = [ pos | (pos, cell) <- cells b, cell==(C (Single c)) || cell==(C (Double c)) ]
 
 -- | Returns cell information at given position.
 cellAt :: Pos -> Board -> Cell
@@ -64,9 +58,9 @@ isValidPos :: Pos -> Bool
 isValidPos (r, c) = 0 <= r && r <= 7 && 0 <= c && c <= 7
 
 -- | Return opposite piece
-oppositePiece :: Piece -> Piece
-oppositePiece Red   = Black
-oppositePiece Black = Red
+oppositeColor :: Color -> Color
+oppositeColor Red   = Black
+oppositeColor Black = Red
 
 -- | The 'pieceMoves' function takes position returns next possible positions
 pieceMoves :: Player -> Board -> Pos -> [Move]
@@ -84,9 +78,13 @@ allDir = redDirs ++ blackDirs
 
 -- | Direction vector
 dirVec :: Piece -> [(Int, Int)]
-dirVec pi = case pi of 
-              Red   -> redDirs 
-              Black -> blackDirs
+dirVec (Single Red)   = redDirs
+dirVec (Single Black) = blackDirs
+dirVec (Double _)     = allDir
+
+nextSteps :: Piece -> Pos -> [Pos]
+nextSteps pi@(Single _) p = applyVec p (dirVec pi)
+nextSteps pi@(Double _) p = applyVec p (dirVec pi)
 
 -- | Generic integer generator. Can accept negative.
 -- Example:
@@ -155,7 +153,7 @@ updateCell (Board b) ((r, c), cell) = Board { board=topRows ++ [updatedRow] ++ b
 -- | The 'playerMoves' function returns possible moves for given player.
 -- Return type is (Pos, Pos), first element is initial position
 -- last element is target position.
-playerMoves :: Board -> Player > [Move]
+playerMoves :: Board -> Player -> [Move]
 playerMoves b pl@(Player pi) = concat $ map (pieceMoves pl b) (pieces pi b)
 
 -- | Check if game is finished for given player
