@@ -10,9 +10,13 @@ import qualified Data.List as List
 data Board = Board { board::[[Cell]] }
 
 -- | Piece on the board. It can either be Red or Black.
-data Piece 
+data Color 
     = Red 
     | Black deriving (Eq)
+
+data Piece
+    = Single Color
+    | Double Color deriving (Eq)
 
 -- | Cell information on the board. Cell can be empty or have one of the pieces.
 data Cell 
@@ -22,7 +26,7 @@ data Cell
 -- | Player. The piece player is playing with.
 -- Red player can move piece only downwards
 -- Black player can move piece only upwards
-data Player = Player Piece
+data Player = Player Color deriving (Eq)
 
 -- | Players initialized.
 red_player   = Player Red
@@ -46,9 +50,51 @@ initialBoard = Board { board = [
                         [ e, b, e, b, e, b, e, b],
                         [ b, e, b, e, b, e, b, e]
                    ]}
-    where e = Empty
-          r = C Red
-          b = C Black
+
+-- | The example board
+example0 :: Board
+example0 = Board { board = [ 
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, r, e, r, e, e, e],
+                        [ e, e, e, b, e, e, e, e],
+                        [ e, e, e, e, r, e, r, e],
+                        [ e, e, e, r, e, e, e, e],
+                        [ r, e, r, e, e, e, r, e],
+                        [ e, b, e, e, e, e, e, b]
+                   ]}
+
+-- | The example board
+example1 :: Board
+example1 = Board { board = [ 
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, r, e, e, e, r, e, e],
+                        [ r, e, r, e, e, e, e, e],
+                        [ e, e, e, e, e, r, e, e],
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, e, e, e, r, e, e],
+                        [ e, e, e, e, e, e, b, e]
+                   ]}
+
+-- | The example board
+example2 :: Board
+example2 = Board { board = [ 
+                        [ e , e , e , e , e , e , e , e],
+                        [ e , e , e , e , e , e , e , e],
+                        [ e , e , b , e , r , e , e , e],
+                        [ e , e , e , e , e , e , e , e],
+                        [ e , e , e , e , r , e , r , e],
+                        [ e , e , e , r , e , r , e , e],
+                        [ r , e , e , e , e , e , r , e],
+                        [ e ,cb , e , e , e , e , e , b]
+                   ]}
+
+e = Empty
+r = C (Single Red)
+b = C (Single Black)
+cr = C (Double Red)
+cb = C (Double Black)
 
 instance Show Board where
     show = showBoard
@@ -68,6 +114,11 @@ showBoard (Board { board=b }) = let boardDisp = concat $ map (unlines . showRow)
                                     boardBott = takeWhile (/='\n') boardDisp
                                  in boardDisp++boardBott
 
+decorate :: String -> String
+decorate b = let table  = lines b 
+                 header = "  "++(List.intercalate "   " (map show [0..7]))++"  " 
+              in unlines $ List.transpose ((' ':header):(List.transpose (header:table)))
+
 showRow :: [Cell] -> [String]
 showRow []     = "+":repeat "|"
 showRow (c:cs) = joinRows (showOnBoard c) (showRow cs)
@@ -80,14 +131,22 @@ showOnBoard Empty     = ["+---",
                          "|   ",
                          "|   ",
                          "|   "]
-showOnBoard (C Red)   = ["+---", 
-                         "| X ",
-                         "|XXX",
-                         "| X "]
-showOnBoard (C Black) = ["+---", 
-                         "| O ",
-                         "|O O",
-                         "| O "]
+showOnBoard (C (Single Red))   = ["+---", 
+                                  "| X ",
+                                  "|X X",
+                                  "| X "]
+showOnBoard (C (Single Black)) = ["+---", 
+                                  "| O ",
+                                  "|O O",
+                                  "| O "]
+showOnBoard (C (Double Red))   = ["+---", 
+                                  "| X ",
+                                  "|XXX",
+                                  "| X "]
+showOnBoard (C (Double Black)) = ["+---", 
+                                  "| O ",
+                                  "|OOO",
+                                  "| O "]
 
 -- | Position on the board.
 type Pos = (Int, Int)
