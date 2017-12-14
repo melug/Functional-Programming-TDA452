@@ -26,7 +26,7 @@ data Cell
 -- | Player. The piece player is playing with.
 -- Red player can move piece only downwards
 -- Black player can move piece only upwards
-data Player = Player Color
+data Player = Player Color deriving (Eq)
 
 -- | Players initialized.
 red_player   = Player Red

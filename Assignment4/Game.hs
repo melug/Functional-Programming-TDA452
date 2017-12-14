@@ -5,6 +5,8 @@
 -}
 module Game where
 
+import System.Random
+
 import Parsers (pmove)
 import Parsing (parse)
 import Checker
@@ -167,15 +169,23 @@ isGameFinished :: Player -> Board -> Bool
 isGameFinished p b = 0 == (length $ playerMoves b p)
 
 -- | Start game loop, asks for moves from players alternating
-loopGame :: Board -> (Player, Player) -> IO ()
-loopGame board (p0, p1) = do
+loopGame :: Board -> (Player, Player) -> Bool -> IO ()
+loopGame board (p0, p1) robot = do
     putStrLn $ decorate (show board)
-    putStr $ "Turn of " ++ show p0 ++ ": "
-    move <- getMove board p0
+    putStrLn $ "Turn of " ++ show p0 ++ ": "
+    move <- if (robot && p0==red_player) then robotMove board p0
+                                         else getMove board p0 
     let newBoard = upgradePiece (makeMove board p0 move) (dest move)
     case isGameFinished p1 newBoard of
       True  -> putStrLn $ show p0 ++ " has won the game!"
-      False -> loopGame newBoard (p1, p0)
+      False -> loopGame newBoard (p1, p0) robot
+
+-- | Random player
+robotMove :: Board -> Player -> IO Move
+robotMove b p = do
+    let moves = playerMoves b p
+    r <- getStdRandom (randomR (0, (length moves)-1))
+    return (moves !! r)
 
 -- | Returns destination of step
 dest :: Move -> Pos
@@ -236,12 +246,15 @@ makeCapture b p m@(Step p0 (p1:ps))
   | otherwise = makeCapture (updateBoard b' [(p1, cellAt p0 b)]) p (Step p1 ps)
     where b' = updateBoard b (map (\pos -> (pos, Empty)) (positionsBetween p0 p1))
 
-main :: IO ()
-main = do
+startGame :: Bool -> IO ()
+startGame robot = do
     putStrLn " Welcome to Checker game. \n\
              \ Top left cell of the board is (0,0) and bottom right is (7,7). \n\
              \ You need to enter moves in following format: \n\
              \ row column - row column \n\
              \ Or if you want to make several moves: \n\
              \ row column - row column - row column ...\n"
-    loopGame initialBoard (black_player, red_player)
+    loopGame initialBoard (black_player, red_player) robot
+
+main :: IO ()
+main = startGame True
