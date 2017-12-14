@@ -51,9 +51,50 @@ initialBoard = Board { board = [
                         [ b, e, b, e, b, e, b, e]
                    ]}
 
+-- | The example board
+example0 :: Board
+example0 = Board { board = [ 
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, r, e, r, e, e, e],
+                        [ e, e, e, b, e, e, e, e],
+                        [ e, e, e, e, r, e, r, e],
+                        [ e, e, e, r, e, e, e, e],
+                        [ r, e, r, e, e, e, r, e],
+                        [ e, b, e, e, e, e, e, b]
+                   ]}
+
+-- | The example board
+example1 :: Board
+example1 = Board { board = [ 
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, r, e, e, e, r, e, e],
+                        [ r, e, r, e, e, e, e, e],
+                        [ e, e, e, e, e, r, e, e],
+                        [ e, e, e, e, e, e, e, e],
+                        [ e, e, e, e, e, r, e, e],
+                        [ e, e, e, e, e, e, b, e]
+                   ]}
+
+-- | The example board
+example2 :: Board
+example2 = Board { board = [ 
+                        [ e , e , e , e , e , e , e , e],
+                        [ e , e , e , e , e , e , e , e],
+                        [ e , e , b , e , r , e , e , e],
+                        [ e , e , e , e , e , e , e , e],
+                        [ e , e , e , e , r , e , r , e],
+                        [ e , e , e , r , e , r , e , e],
+                        [ r , e , e , e , e , e , r , e],
+                        [ e ,cb , e , e , e , e , e , b]
+                   ]}
+
 e = Empty
 r = C (Single Red)
 b = C (Single Black)
+cr = C (Double Red)
+cb = C (Double Black)
 
 instance Show Board where
     show = showBoard
@@ -72,6 +113,11 @@ showBoard :: Board -> String
 showBoard (Board { board=b }) = let boardDisp = concat $ map (unlines . showRow) b
                                     boardBott = takeWhile (/='\n') boardDisp
                                  in boardDisp++boardBott
+
+decorate :: String -> String
+decorate b = let table  = lines b 
+                 header = "  "++(List.intercalate "   " (map show [0..7]))++"  " 
+              in unlines $ List.transpose ((' ':header):(List.transpose (header:table)))
 
 showRow :: [Cell] -> [String]
 showRow []     = "+":repeat "|"

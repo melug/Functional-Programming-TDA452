@@ -11,32 +11,6 @@ import Checker
 
 import qualified Data.List as List
 
--- | The example board
-example0 :: Board
-example0 = Board { board = [ 
-                        [ e, e, e, e, e, e, e, e],
-                        [ e, e, e, e, e, e, e, e],
-                        [ e, e, r, e, r, e, e, e],
-                        [ e, e, e, b, e, e, e, e],
-                        [ e, e, e, e, r, e, r, e],
-                        [ e, e, e, r, e, e, e, e],
-                        [ r, e, r, e, e, e, r, e],
-                        [ e, b, e, e, e, e, e, b]
-                   ]}
-
--- | The example board
-example1 :: Board
-example1 = Board { board = [ 
-                        [ e, e, e, e, e, e, e, e],
-                        [ e, e, e, e, e, e, e, e],
-                        [ e, e, r, e, r, e, e, e],
-                        [ e, e, e, e, e, e, e, e],
-                        [ e, e, b, e, r, e, r, e],
-                        [ e, e, e, r, e, e, e, e],
-                        [ r, e, r, e, e, e, r, e],
-                        [ e, e, e, e, e, e, e, b]
-                   ]}
-
 -- | The 'cells' function takes board and returns list of cell information.
 cells :: Board -> [(Pos, Cell)]
 cells (Board b) = concat $ map (\(r, row) -> map (\(c, val) -> ((r, c), val)) (zip [0..] row)) (zip [0..] b)
@@ -49,6 +23,16 @@ pieces c b = [ pos | (pos, cell) <- cells b, cell==(C (Single c)) || cell==(C (D
 cellAt :: Pos -> Board -> Cell
 cellAt (r, c) (Board b) = head $ drop c $ head $ drop r b
 
+cellColor :: Pos -> Board -> Maybe Color
+cellColor p b = case cellAt p b of
+                  (C (Single cc)) -> Just cc
+                  (C (Double cc)) -> Just cc
+                  _               -> Nothing
+
+cellPiece :: Pos -> Board -> Piece
+cellPiece p b = let (C pi) = cellAt p b
+                 in pi
+
 -- | Check if given position is empty
 isEmptyAt :: Pos -> Board -> Bool
 isEmptyAt p b = cellAt p b == Empty
@@ -57,34 +41,27 @@ isEmptyAt p b = cellAt p b == Empty
 isValidPos :: Pos -> Bool
 isValidPos (r, c) = 0 <= r && r <= 7 && 0 <= c && c <= 7
 
--- | Return opposite piece
+-- | Return opposite color
 oppositeColor :: Color -> Color
 oppositeColor Red   = Black
 oppositeColor Black = Red
 
--- | The 'pieceMoves' function takes position returns next possible positions
-pieceMoves :: Player -> Board -> Pos -> [Move]
-pieceMoves pl@(Player pi) b p = steps ++ captures
-  where steps       = filter (isValidStep b pl) allSteps 
-        allSteps    = [ (Step p [p1]) | p1 <- (applyVec p (dirVec pi)) ]
-        captures    = filter (isValidCapture b pl) allCaptures
-        allCaptures = [ (Step p [p2]) | (p1, p2) <- (zip oneStep twoStep) ]
-        oneStep     = applyVec p allDir
-        twoStep     = applyVec p $ map (\(x, y) -> (2*x, 2*y)) allDir
+-- | The 'pieceMoves' function takes position returns two
+-- list of moves. First list of moves is steps, second list
+-- of moves is captures. 
+pieceMoves :: Player -> Board -> Pos -> ([Move], [Move])
+pieceMoves pl@(Player pi) b p = (steps, captures)
+    where steps       = filter (isValidStep b pl) $ allMoves p
+          captures    = filter (isValidCapture b pl) $ allMoves p
 
 -- | All 4 direction vectors
 allDir :: [(Int, Int)]
-allDir = redDirs ++ blackDirs
+allDir = dirs Red ++ dirs Black
 
--- | Direction vector
-dirVec :: Piece -> [(Int, Int)]
-dirVec (Single Red)   = redDirs
-dirVec (Single Black) = blackDirs
-dirVec (Double _)     = allDir
-
-nextSteps :: Piece -> Pos -> [Pos]
-nextSteps pi@(Single _) p = applyVec p (dirVec pi)
-nextSteps pi@(Double _) p = applyVec p (dirVec pi)
+-- | Generate all possible moves for given position
+allMoves :: Pos -> [Move]
+allMoves p = [ (Step p [p1]) | p1 <- nextPositions ]
+    where nextPositions = (concat $ map (positionsBetween p) $ map (\(x, y) -> (7*x, 7*y)) allDir) List.\\ [p]
 
 -- | Generic integer generator. Can accept negative.
 -- Example:
@@ -100,41 +77,68 @@ range a b
 positionsBetween :: Pos -> Pos -> [Pos]
 positionsBetween (r0, c0) (r1, c1) = zip (range r0 r1) (range c0 c1)
 
-isValidCapture :: Board -> Player -> Move -> Bool
-isValidCapture b p@(Player pi) (Step p0 (p1:ps)) 
-  | ps == []  = isValidPos p1 && 
-                isEmptyAt p1 b && 
-                isDiagonal p0 p1 && 
-                numOfReds==1 && 
-                numOfBlacks==1 && 
-                cellAt p0 b==(C pi)
-  | otherwise = isValidCapture b p (Step p0 [p1]) && isValidCapture b' p (Step p1 ps)
-    where numOfReds   = length $ filter (\p -> cellAt p b==(C Red)) (positionsBetween p0 p1)
-          numOfBlacks = length $ filter (\p -> cellAt p b==(C Black)) (positionsBetween p0 p1)
-          b'          = makeCapture b p (Step p0 [p1])
-
+-- | Check if given positions lays on diagonal
 isDiagonal :: Pos -> Pos -> Bool
 isDiagonal (r0, c0) (r1, c1) = abs (r0-r1) == abs (c0-c1)
           
-isValidStep :: Board -> Player -> Move -> Bool
-isValidStep b (Player pi) (Step p0 (p1:[])) = isValidPos p1 && 
-                                              isEmptyAt p1 b && 
-                                              cellAt p0 b==(C pi) &&
-                                              List.elem p1 (applyVec p0 (dirVec pi))
-isValidStep b (Player pi) (Step p0 (p1:ps)) = False
-
--- | Vector for capture directions
-captureDir = [(-1, -1), (-1, 1), (1, 1), (1, -1)]
 -- | Vector for steps of black pieces
-blackDirs = [(-1, -1), (-1,  1)]
--- | Vector for steps of red pieces
-redDirs   = [( 1,  1), ( 1, -1)]
+dirs :: Color -> [(Int, Int)]
+dirs Red   = [( 1,  1), ( 1, -1)]
+dirs Black = [(-1, -1), (-1,  1)]
 
--- | From given position and direction vector, return next positions.
--- Example: (3, 3) -> [(-1, -1), (-1, +1)] -> [(2, 2), (2, 4)]
-applyVec :: Pos -> [(Int, Int)] -> [Pos]
-applyVec (r,c) []           = []
-applyVec (r,c) ((dr,dc):ds) = (dr+r,dc+c):applyVec (r,c) ds
+-- | From given two position make
+-- direction vector
+dirFromPos :: Pos -> Pos -> (Int, Int)
+dirFromPos (r0, c0) (r1, c1) = (makeVec r0 r1, makeVec c0 c1)
+
+makeVec :: Int -> Int -> Int
+makeVec a b 
+  | a > b     = -1 
+  | a < b     = 1 
+  | otherwise = 0
+
+-- | Basic validity of move, irrespective to
+-- step and capture. Which includes diagonal 
+-- test, if player owns the piece, destination
+-- position stays on the board.
+basicValidMove :: Board -> Player -> Move -> Bool
+basicValidMove b p@(Player pc) (Step p0 (p1:ps)) = validPiece && validPos
+    where validPiece  = cell' /= Empty && cellColor' == Just pc
+          cell'       = cellAt p0 b
+          cellColor'  = cellColor p0 b
+          validPos    = isValidPos p1 && isEmptyAt p1 b && isDiagonal p0 p1
+
+-- | Filter out valid step moves.
+isValidStep :: Board -> Player -> Move -> Bool
+isValidStep b p@(Player pc) s@(Step p0 (p1:ps))
+-- | No multiple moves allowed
+  | ps /= []  = False
+  | otherwise = basicValidMove b p s && validPath
+  where validPath   = isEmptyPath && isDistanceCorrect && isDirCorrect
+        isEmptyPath = all (\p -> cellAt p b==Empty) path
+        isDistanceCorrect = case cellPiece p0 b of
+                              (Single _) -> length path == 1
+                              (Double _) -> True
+        path        = (positionsBetween p0 p1 List.\\ [p0])
+        isDirCorrect = case cellPiece p0 b of
+                         (Single _) -> List.elem (dirFromPos p0 p1) (dirs pc)
+                         -- | King can move everywhere
+                         (Double _) -> True
+
+isValidCapture :: Board -> Player -> Move -> Bool
+isValidCapture b p@(Player pc) s@(Step p0 (p1:ps)) 
+  | ps == []  = basicValidMove b p s && validPath
+-- | Check series of captures
+  | otherwise = isValidCapture b p (Step p0 [p1]) && isValidCapture b' p (Step p1 ps)
+    where numOfReds   = length $ filter (\p -> cellColor p b==Just Red) (positionsBetween p0 p1)
+          numOfBlacks = length $ filter (\p -> cellColor p b==Just Black) (positionsBetween p0 p1)
+          b'          = makeCapture b p (Step p0 [p1])
+          validPath   = isPathOk && isDistanceCorrect
+          isPathOk    = numOfReds == 1 && numOfBlacks == 1
+          isDistanceCorrect = case cellPiece p0 b of
+                                (Single _) -> length path == 2
+                                (Double _) -> True
+          path        = (positionsBetween p0 p1 List.\\ [p0])
 
 -- | Updates board, at given position change value to cell
 updateBoard :: Board -> [(Pos, Cell)] -> Board
@@ -151,10 +155,12 @@ updateCell (Board b) ((r, c), cell) = Board { board=topRows ++ [updatedRow] ++ b
           bottomRows = drop (r+1) b
 
 -- | The 'playerMoves' function returns possible moves for given player.
--- Return type is (Pos, Pos), first element is initial position
--- last element is target position.
+-- If player has "capture" moves, player must do capture.
 playerMoves :: Board -> Player -> [Move]
-playerMoves b pl@(Player pi) = concat $ map (pieceMoves pl b) (pieces pi b)
+playerMoves b pl@(Player pi) = let (steps', captures') = (unzip $ map (pieceMoves pl b) (pieces pi b))
+                                   steps = concat steps'
+                                   captures = concat captures'
+                                in if length captures/=0 then captures else steps
 
 -- | Check if game is finished for given player
 isGameFinished :: Player -> Board -> Bool
@@ -163,13 +169,29 @@ isGameFinished p b = 0 == (length $ playerMoves b p)
 -- | Start game loop, asks for moves from players alternating
 loopGame :: Board -> (Player, Player) -> IO ()
 loopGame board (p0, p1) = do
-    putStrLn $ show board
+    putStrLn $ decorate (show board)
     putStr $ "Turn of " ++ show p0 ++ ": "
     move <- getMove board p0
-    let newBoard = makeMove board p0 move
+    let newBoard = upgradePiece (makeMove board p0 move) (dest move)
     case isGameFinished p1 newBoard of
       True  -> putStrLn $ show p0 ++ " has won the game!"
       False -> loopGame newBoard (p1, p0)
+
+-- | Returns destination of step
+dest :: Move -> Pos
+dest (Step s0 ss) = dest' ss
+    where dest' (s:[]) = s
+          dest' (s:ss) = dest' ss
+
+-- | Crown piece if the piece reaches
+-- other end.
+upgradePiece :: Board -> Pos -> Board
+upgradePiece b p@(r, c) = case cellAt p b of 
+                            (C (Single Black)) -> if r==0 then updateCell b (p, (C (Double Black)))
+                                                          else b
+                            (C (Single Red))   -> if r==7 then updateCell b (p, (C (Double Red)))
+                                                          else b
+                            _                  -> b
 
 -- | Ask for move until user gives valid move.
 -- Valid input would be number a and b, then if move includes
@@ -182,14 +204,23 @@ getMove b pl@(Player pi) = do
     l <- getLine
     case parse pmove l of
       Just (m, "") -> if isValidMove b pl m then return m 
-                                            else do putStrLn "Not valid move" 
+                                            else do putStrLn $ "Not valid move, valid moves are: " ++ validMoves
                                                     getMove b pl
       _            -> do putStrLn "Couldn't parse move"
                          getMove b pl
+    where validMoves = List.intercalate ", " $ map show (playerMoves b pl)
 
 -- | Check if move is valid
 isValidMove :: Board -> Player -> Move -> Bool
-isValidMove b p m = isValidStep b p m || isValidCapture b p m
+isValidMove b p (Step _ []) = False
+isValidMove b p m           = isValid (playerMoves b p) m && (isValidCapture b p m || isValidStep b p m)
+-- | Check if given move is in list of moves
+    where isValid :: [Move] -> Move -> Bool
+          isValid [] m1                                         = False
+          isValid ((Step s0 (s1:[])):ss) m1@(Step t0 (t1:_))
+            | s0==t0 && s1==t1 = True
+            | otherwise        = isValid ss m1
+
 
 makeMove :: Board -> Player -> Move -> Board
 makeMove b p m
@@ -213,4 +244,4 @@ main = do
              \ row column - row column \n\
              \ Or if you want to make several moves: \n\
              \ row column - row column - row column ...\n"
-    loopGame example1 (black_player, red_player)
+    loopGame initialBoard (black_player, red_player)
