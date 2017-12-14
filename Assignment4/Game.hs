@@ -1,6 +1,5 @@
 {-
    Tulga Ariuntuya, Naga Charan.
-
    Checker board modeling.
 -}
 module Game where
@@ -155,7 +154,7 @@ updateCell (Board b) ((r, c), cell) = Board { board=topRows ++ [updatedRow] ++ b
 -- | The 'playerMoves' function returns possible moves for given player.
 -- Return type is (Pos, Pos), first element is initial position
 -- last element is target position.
-playerMoves :: Board -> Player > [Move]
+playerMoves :: Board -> Player -> [Move]
 playerMoves b pl@(Player pi) = concat $ map (pieceMoves pl b) (pieces pi b)
 
 -- | Check if game is finished for given player
@@ -212,7 +211,7 @@ main = do
     putStrLn " Welcome to Checker game. \n\
              \ Top left cell of the board is (0,0) and bottom right is (7,7). \n\
              \ You need to enter moves in following format: \n\
-             \ row column - row column \n\
+             \ row column - row column , for example: 5 0 - 4 1\n\
              \ Or if you want to make several moves: \n\
              \ row column - row column - row column ...\n"
-    loopGame example1 (black_player, red_player)
+    loopGame initialBoard (black_player, red_player)
