@@ -36,7 +36,7 @@ black_player = Player Black
 data Move 
     -- | Move can include number of positions.
     -- first position is always initial position.
-    = Step Pos [Pos]
+    = Step Pos [Pos] deriving (Eq)
 
 -- | The 'initialBoard' returns initial setting of the Checker board.
 initialBoard :: Board
@@ -55,13 +55,13 @@ initialBoard = Board { board = [
 example0 :: Board
 example0 = Board { board = [ 
                         [ e, e, e, e, e, e, e, e],
+                        [ e, b, e, e, e, e, e, e],
+                        [ e, e, e, e, r, e, e, e],
                         [ e, e, e, e, e, e, e, e],
-                        [ e, e, r, e, r, e, e, e],
-                        [ e, e, e, b, e, e, e, e],
                         [ e, e, e, e, r, e, r, e],
                         [ e, e, e, r, e, e, e, e],
                         [ r, e, r, e, e, e, r, e],
-                        [ e, b, e, e, e, e, e, b]
+                        [ e, e, e, e, e, e, e, e]
                    ]}
 
 -- | The example board
@@ -105,6 +105,16 @@ instance Show Move where
 instance Show Player where
     show (Player Red)   = "Red"
     show (Player Black) = "Black"
+
+instance Show Cell where
+    show = showCell
+
+showCell :: Cell -> String
+showCell Empty              = "e "
+showCell (C (Single Red))   = "sr"
+showCell (C (Single Black)) = "sb"
+showCell (C (Double Red))   = "dr"
+showCell (C (Double Black)) = "db"
 
 showMove :: Move -> String
 showMove (Step p0 ps) = List.intercalate "->" (map show (p0:ps))
